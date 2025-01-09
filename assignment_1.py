@@ -76,24 +76,24 @@ def bootstrap_yield_rate(d, x):
 
 def create_sorted_bonds_by_maturity():
     dfs = pd.read_excel('bond_prices.xlsx', sheet_name=None, usecols = ['Coupon', 'Maturity Date', 'Bid', 'Ask', 'Years until Maturity'])
-    jan6 = dfs['January 6']
+    bond = dfs['January 7']
     
     # get all the required information for the bonds
-    jan6['Maturity Date'] = pd.to_datetime(jan6['Maturity Date'])
-    jan6['Month'] = jan6['Maturity Date'].dt.month
-    jan6['Days since last coupon payment'] = jan6['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
-    jan6['Dirty price'] = jan6.apply(lambda row: calculate_dirty_prices(row['Ask'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
+    bond['Maturity Date'] = pd.to_datetime(bond['Maturity Date'])
+    bond['Days since last coupon payment'] = bond['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
+    bond['Dirty price'] = bond.apply(lambda row: calculate_dirty_prices(row['Ask'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
     
     # sort the bonds by years until maturity
-    jan6_sorted_by_years_until_maturity = jan6.sort_values(by='Years until Maturity', ascending=True)
+    bond_sorted_by_years_until_maturity = bond.sort_values(by='Years until Maturity', ascending=True)
     # print(jan6_sorted_by_years_until_maturity[['Dirty price', 'Years until Maturity']])
 
-    return jan6_sorted_by_years_until_maturity
+    return bond_sorted_by_years_until_maturity
 
 def calculate_all_yield_rates(bonds):
     
     # calcualte the yield rates
     yield_rates = {}
+    # TODO: What to do if duplicate values of t give different values of r(t)
     for index, row in bonds.iterrows():
         t = row['Years until Maturity']
         if row['Dirty price'] == "-":
