@@ -40,13 +40,13 @@ def calcualte_spot_rates(spot_rates, dirty_price, coupon_rate, years_until_matur
         if t in spot_rates:
             r = spot_rates[t]
         else:
-            r = bootstrap_spot_rate(spot_rates, t)
+            r = interpolate_rate(spot_rates, t)
         price -= N * np.exp(- r * t)
 
     N = 100 + 100 * coupon_rate / 2
     return - np.log(price / N) / years_until_maturity
 
-def bootstrap_spot_rate(d, x):
+def interpolate_rate(d, x):
     # sort the dictionary by keys
     sorted_keys = sorted(d.keys())
     # Find the two closest keys to 'x' (one smaller and one larger)
@@ -193,7 +193,7 @@ def calculate_future_price(future_time, years_until_maturity, spot_rates, coupon
         if t in spot_rates:
             r = spot_rates[t]
         else:
-            r = bootstrap_spot_rate(spot_rates, t)
+            r = interpolate_rate(spot_rates, t)
         future_price += coupon_payment * np.exp(- r * (t-future_time))
     # add the final payment when the bond matures
     r = spot_rates[years_until_maturity]
@@ -242,6 +242,40 @@ def calculate_forward_rate(all_spot_rates, all_bonds):
         all_forward_rates[date] = forward_rates
 
     return all_forward_rates
+
+# calculate covariance matricies
+def calculate_covariance_matricies(all_yield_rates, all_forward_rates):
+    # create the 5 random vectors X_i, each with 9 entries
+
+    vectors = []
+    for i in range(5):
+        vectors.append(np.zeros(9))
+    dates = list(all_yield_rates.keys())
+    # vector for yield rates
+    for j in range(9): # each column is a date in our 10 day data collection period
+        today_yield_rates = all_yield_rates[dates[j]]
+        tomorrow_yield_rates = all_yield_rates[dates[j+1]]
+        for i in range(5): 
+            years_until_maturity = float(i + 1)
+            if years_until_maturity in today_yield_rates:
+                today_rate = today_yield_rates[years_until_maturity]
+            else:
+                today_rate = interpolate_rate(today_yield_rates, years_until_maturity)
+            if years_until_maturity in tomorrow_yield_rates:
+                tomorrow_rate = tomorrow_yield_rates[years_until_maturity]
+            else:
+                tomorrow_rate = interpolate_rate(tomorrow_yield_rates, years_until_maturity)
+            vectors[i][j] = np.log(tomorrow_rate / today_rate)
+
+    # create the covariance matrix
+    data = np.vstack([vectors[0], vectors[1], vectors[2], vectors[3], vectors[4]])
+    covariance_matrix = np.cov(data, rowvar=False)
+    print(f'Covariance matrix: {covariance_matrix}')
+
+    # calculate the Eigenvalues and Eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
+    print("Eigenvalues:", eigenvalues)
+    print("Eigenvectors:\n", eigenvectors)
 
 # plot ytm curve
 def plot_ytm_curve(ytm_rates):
