@@ -28,13 +28,13 @@ def calcualte_spot_rates(spot_rates, dirty_price, coupon_rate, years_until_matur
         return val
 
     number_of_coupon_payments = int(np.floor(years_until_maturity * 2))
-    # print(f"T: {years_until_maturity}")
+    # print(f"T: {years_until_maturity}, number of coupon payments: {number_of_coupon_payments}")
 
     price = dirty_price
     # subtract the previous payments
-    for i in range(number_of_coupon_payments - 1):
-        t = years_until_maturity - (number_of_coupon_payments - i - 1) * 0.5
-        # print(f"temp t: {t}")
+    for i in range(number_of_coupon_payments):
+        t = round(years_until_maturity - (number_of_coupon_payments - i) * 0.5, 4) # due to numerical errors
+        # print(f"i: {i}, temp t: {t}")
         N = 100 * coupon_rate / 2
 
         if t in spot_rates:
@@ -66,7 +66,7 @@ def interpolate_rate(d, x):
         else:
             xl = key
             yl = val
-    # print(f"x: {x}. xl: {xl}, xu: {xu}, yl: {yl}, yu: {yu}")
+    # print(f"x: {x}. xl: {xl}, xu: {xu}")
 
     # if there is no xu, then just pretend x = xl // TODO: ASK WHAT TO DO HERE
     if xu == 0:
@@ -92,6 +92,7 @@ def create_sorted_bonds_by_maturity(file_name):
         df['Maturity Date'] = pd.to_datetime(df['Maturity Date'])
         df['Days since last coupon payment'] = df['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
         df['Dirty price'] = df.apply(lambda row: calculate_dirty_prices(row['Price'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
+        df['Years until Maturity'] = df['Years until Maturity'].round(4)
         # print(df[['Dirty price', 'Years until Maturity']])
 
     return dfs
@@ -134,10 +135,12 @@ def plot_spot_curve(spot_rates):
         plt.plot(years_until_maturity, spot_rates_values, label = name, marker='o', linestyle='-', color=cmap(i / len(spot_rates)))
     
     # add labels and title
-    plt.xlabel('Years until Maturity')
-    plt.ylabel('Yield')
-    plt.title('0-5 Year Spot Curve')
-    plt.legend(loc='upper right')
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('Years until Maturity', fontsize=30)
+    plt.ylabel('Yield', fontsize=30)
+    plt.title('0-5 Year Spot Curve', fontsize=30)
+    plt.legend(loc='lower right', fontsize=20)
 
 
 def calculate_ytm(dirty_price, coupon_rate, years_until_maturity):
@@ -188,28 +191,7 @@ def calculate_future_price_zero_bonds(future_time, years_until_maturity, spot_ra
             r = spot_rates[years_until_maturity]
     else:
         r = interpolate_rate(spot_rates, years_until_maturity)
-    future_price = np.exp(r * (years_until_maturity - future_time)) # no need for the 100 as it gets cancelled out in the log anyways
-    return future_price
-
-
-# calculate the future price of a coupon bond
-def calculate_future_price(future_time, years_until_maturity, spot_rates, coupon_rate):
-    number_of_coupon_payments = int(np.floor((years_until_maturity - future_time) * 2))
-    future_price = 0
-    coupon_payment = 100 * coupon_rate / 2
-
-    for i in range(number_of_coupon_payments - 1):
-        t = years_until_maturity - (number_of_coupon_payments - i - 1) * 0.5
-
-        if t in spot_rates:
-            r = spot_rates[t]
-        else:
-            r = interpolate_rate(spot_rates, t)
-        future_price += coupon_payment * np.exp(- r * (t-future_time))
-    # add the final payment when the bond matures
-    r = spot_rates[years_until_maturity]
-    future_price += (100 + coupon_payment) * np.exp(- r * (years_until_maturity - future_time))
-
+    future_price = np.exp( - r * (years_until_maturity - future_time)) # no need for the 100 as it gets cancelled out in the log anyways
     return future_price
 
 # create forward rate
@@ -244,12 +226,12 @@ def calculate_forward_rate(all_spot_rates, all_bonds):
         number_of_points = len(future_prices)
         for index in range(number_of_points):
             if index == 0:
-                forward_rates[maturities[index]] = (future_prices[index + 1] - future_prices[index]) / (maturities[index + 1] - maturities[index])
+                forward_rates[maturities[index]] = - (future_prices[index + 1] - future_prices[index]) / (maturities[index + 1] - maturities[index])
                 # print(f'val = {(future_prices[index + 1] - future_prices[index]) / (maturities[index + 1] - maturities[index])}')
             elif index == number_of_points - 1:
-                forward_rates[maturities[index]] = (future_prices[index] - future_prices[index - 1]) / (maturities[index] - maturities[index - 1])
+                forward_rates[maturities[index]] = - (future_prices[index] - future_prices[index - 1]) / (maturities[index] - maturities[index - 1])
             else: # take average of slope on both sides
-                forward_rates[maturities[index]] = 0.5 * ((future_prices[index + 1] - future_prices[index]) / (maturities[index + 1] - maturities[index]) + (future_prices[index] - future_prices[index - 1]) / (maturities[index] - maturities[index - 1]))
+                forward_rates[maturities[index]] = - 0.5 * ((future_prices[index + 1] - future_prices[index]) / (maturities[index + 1] - maturities[index]) + (future_prices[index] - future_prices[index - 1]) / (maturities[index] - maturities[index - 1]))
         
         all_forward_rates[date] = forward_rates
 
@@ -361,10 +343,12 @@ def plot_ytm_curve(ytm_rates):
         plt.plot(years_until_maturity, ytm_values, label = name, marker='o', linestyle='-', color=cmap(i / len(ytm_rates)))
     
     # add labels and title
-    plt.xlabel('Years until Maturity')
-    plt.ylabel('YTM Value')
-    plt.title('0-5 Year YTM Curve')
-    plt.legend(loc='upper right')
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('Years until Maturity', fontsize=30)
+    plt.ylabel('YTM Value', fontsize=30)
+    plt.title('0-5 Year YTM Curve', fontsize=30)
+    plt.legend(loc='lower right', fontsize=20)
 
 # plot forward rates
 def plot_forward_rates_curve(forward_rates):
@@ -383,35 +367,12 @@ def plot_forward_rates_curve(forward_rates):
         plt.plot(years_until_maturity, forward_rates_values, label = name, marker='o', linestyle='-', color=cmap(i / len(forward_rates)))
     
     # add labels and title
-    plt.xlabel('T = Years until Maturity')
-    plt.ylabel('f(1, T)')
-    plt.title('1-year Forward Rate Curve')
-    plt.legend(loc='upper right')
-
-def plot_difference(yield_rates, ytm_rates):
-
-    cmap = plt.get_cmap('tab10')
-
-    for i, date in enumerate(ytm_rates):
-        # plot curve for each date
-        years_until_maturity = list(ytm_rates[date].keys())
-        ytm_values = list(ytm_rates[date].values())
-        yield_values = list(yield_rates[date].values())
-        result = []
-        for i in range(len(ytm_values)):
-            result.append(ytm_values[i] - yield_values[i])
-        
-        # get the label for the plot
-        words = date.split()
-        name = ' '.join(words[1:])
-
-        plt.plot(years_until_maturity, result, label = name, marker='o', linestyle='-', color=cmap(i / len(ytm_rates)))
-    
-    # add labels and title
-    plt.xlabel('Years until Maturity')
-    plt.ylabel('Yield')
-    plt.title('0-5 Year YTM Curve')
-    plt.legend(loc='upper right')
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('T = Years until Maturity', fontsize=30)
+    plt.ylabel('f(1, T)', fontsize=30)
+    plt.title('Forward Rate Curve', fontsize=30)
+    plt.legend(loc='lower right', fontsize=20)
 
 # get the data
 sorted_bonds = create_sorted_bonds_by_maturity('bond_prices_chosen_bonds.xlsx')
@@ -436,6 +397,5 @@ plt.figure()
 plot_ytm_curve(yield_rates)
 plt.figure()
 plot_forward_rates_curve(forward_rates)
-# plt.figure()
-# plot_difference(yield_rates, ytm_rates)
+
 plt.show()
