@@ -31,10 +31,12 @@ def read_extra_data(file_name):
     dfs = pd.read_excel(file_name, sheet_name=None, usecols = [''])
 
 def calculate_days_since_last_coupon_payment(date):
-    if date.month < 7:
-        start_date = datetime(date.year, 1, 1)
-    else:
-        start_date = datetime(date.year, 6, 30)
+    if date.month < 3: # since all coupons mature on March 1 or Sept 1
+        start_date = datetime(date.year - 1, 9, 1)
+    elif date.month > 9:
+        start_date = datetime(date.year, 9, 1)
+    else: 
+        start_date = datetime(date.year, 3, 1)
     
     return (date - start_date).days
 
@@ -100,7 +102,6 @@ def interpolate_rate(d, x):
         interpolated_value = yl + (x - xl) * (yu - yl) / (xu - xl)
         return interpolated_value
 
-
 def calculate_all_spot_rates(bonds):
     all_spot_rates = {}
     for date, bond in bonds.items():
@@ -150,18 +151,17 @@ def calculate_ytm(dirty_price, coupon_rate, years_until_maturity):
     coupon_payment = 100 * coupon_rate / 2
     if years_until_maturity < 0.5:
         notional = 100 + coupon_payment
-        # print(f"notional: {notional}, {dirty_price / notional}, {years_until_maturity}, {np.log(dirty_price / notional)}")
         val = - np.log(dirty_price / notional) / years_until_maturity
         return val
     
     number_of_coupon_payments = int(np.floor(years_until_maturity * 2))
-    
+
     # define function for continuous compounding ytm
     def equation(r):
         # consider all coupon payments
         present_value = 0
-        for i in range(number_of_coupon_payments - 1):
-            t = years_until_maturity - (number_of_coupon_payments - i - 1) * 0.5
+        for i in range(number_of_coupon_payments):
+            t = years_until_maturity - (number_of_coupon_payments - i) * 0.5
             present_value += coupon_payment * np.exp(-r * t)
         present_value += (100 + coupon_payment) * np.exp(-r * years_until_maturity)
         return present_value - dirty_price
