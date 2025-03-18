@@ -6,11 +6,37 @@ from scipy.optimize import fsolve
 
 import matplotlib.pyplot as plt
 
+def create_sorted_bonds_by_maturity(file_name):
+    # If you want to read only a subset of sheets
+    # xls = pd.ExcelFile('bond_prices.xlsx')
+    # sheet_names = xls.sheet_names
+    # Filter sheet names that start with 'Desired'
+    # desired_sheets = [sheet for sheet in sheet_names if sheet.startswith('Desired')]
+    # dfs = pd.read_excel('bond_prices.xlsx', sheet_name=desired_sheets, usecols = ['Coupon', 'Maturity Date', 'Bid', 'Ask', 'Years until Maturity'])
+
+    dfs = pd.read_excel(file_name, sheet_name=None, usecols = ['Coupon', 'Maturity Date', 'Price', 'Years until Maturity'])
+    
+    for sheet_name, df in dfs.items():
+        print(f"Processing sheet: {sheet_name}")
+        # get all the required information for the bonds
+        df['Maturity Date'] = pd.to_datetime(df['Maturity Date'])
+        df['Days since last coupon payment'] = df['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
+        df['Dirty price'] = df.apply(lambda row: calculate_dirty_prices(row['Price'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
+        df['Years until Maturity'] = df['Years until Maturity'].round(4)
+        # print(df[['Dirty price', 'Years until Maturity']])
+
+    return dfs
+
+def read_extra_data(file_name):
+    dfs = pd.read_excel(file_name, sheet_name=None, usecols = [''])
+
 def calculate_days_since_last_coupon_payment(date):
-    if date.month < 7:
-        start_date = datetime(date.year, 1, 1)
-    else:
-        start_date = datetime(date.year, 6, 30)
+    if date.month < 3: # since all coupons mature on March 1 or Sept 1
+        start_date = datetime(date.year - 1, 9, 1)
+    elif date.month > 9:
+        start_date = datetime(date.year, 9, 1)
+    else: 
+        start_date = datetime(date.year, 3, 1)
     
     return (date - start_date).days
 
@@ -35,7 +61,7 @@ def calcualte_spot_rates(spot_rates, dirty_price, coupon_rate, years_until_matur
     for i in range(number_of_coupon_payments):
         t = round(years_until_maturity - (number_of_coupon_payments - i) * 0.5, 4) # due to numerical errors
         # print(f"i: {i}, temp t: {t}")
-        N = 100 * coupon_rate / 2
+        N = 100 * coupon_rate / 2 # nominal
 
         if t in spot_rates:
             r = spot_rates[t]
@@ -75,27 +101,6 @@ def interpolate_rate(d, x):
         # Perform linear interpolation
         interpolated_value = yl + (x - xl) * (yu - yl) / (xu - xl)
         return interpolated_value
-
-def create_sorted_bonds_by_maturity(file_name):
-    # If you want to read only a subset of sheets
-    # xls = pd.ExcelFile('bond_prices.xlsx')
-    # sheet_names = xls.sheet_names
-    # Filter sheet names that start with 'Desired'
-    # desired_sheets = [sheet for sheet in sheet_names if sheet.startswith('Desired')]
-    # dfs = pd.read_excel('bond_prices.xlsx', sheet_name=desired_sheets, usecols = ['Coupon', 'Maturity Date', 'Bid', 'Ask', 'Years until Maturity'])
-
-    dfs = pd.read_excel(file_name, sheet_name=None, usecols = ['Coupon', 'Maturity Date', 'Price', 'Years until Maturity'])
-    
-    for sheet_name, df in dfs.items():
-        print(f"Processing sheet: {sheet_name}")
-        # get all the required information for the bonds
-        df['Maturity Date'] = pd.to_datetime(df['Maturity Date'])
-        df['Days since last coupon payment'] = df['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
-        df['Dirty price'] = df.apply(lambda row: calculate_dirty_prices(row['Price'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
-        df['Years until Maturity'] = df['Years until Maturity'].round(4)
-        # print(df[['Dirty price', 'Years until Maturity']])
-
-    return dfs
 
 def calculate_all_spot_rates(bonds):
     all_spot_rates = {}
@@ -142,23 +147,21 @@ def plot_spot_curve(spot_rates):
     plt.title('0-5 Year Spot Curve', fontsize=30)
     plt.legend(loc='lower right', fontsize=20)
 
-
 def calculate_ytm(dirty_price, coupon_rate, years_until_maturity):
     coupon_payment = 100 * coupon_rate / 2
     if years_until_maturity < 0.5:
         notional = 100 + coupon_payment
-        # print(f"notional: {notional}, {dirty_price / notional}, {years_until_maturity}, {np.log(dirty_price / notional)}")
         val = - np.log(dirty_price / notional) / years_until_maturity
         return val
     
     number_of_coupon_payments = int(np.floor(years_until_maturity * 2))
-    
+
     # define function for continuous compounding ytm
     def equation(r):
         # consider all coupon payments
         present_value = 0
-        for i in range(number_of_coupon_payments - 1):
-            t = years_until_maturity - (number_of_coupon_payments - i - 1) * 0.5
+        for i in range(number_of_coupon_payments):
+            t = years_until_maturity - (number_of_coupon_payments - i) * 0.5
             present_value += coupon_payment * np.exp(-r * t)
         present_value += (100 + coupon_payment) * np.exp(-r * years_until_maturity)
         return present_value - dirty_price
@@ -375,7 +378,7 @@ def plot_forward_rates_curve(forward_rates):
     plt.legend(loc='lower right', fontsize=20)
 
 # get the data
-sorted_bonds = create_sorted_bonds_by_maturity('bond_prices_chosen_bonds.xlsx')
+sorted_bonds = create_sorted_bonds_by_maturity('bond_prices_chosen_bonds_copy.xlsx')
 spot_rates = calculate_all_spot_rates(sorted_bonds)
 yield_rates = calculate_ytm_curve(sorted_bonds)
 forward_rates = calculate_forward_rate(spot_rates, sorted_bonds)
