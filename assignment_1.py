@@ -378,7 +378,7 @@ def plot_forward_rates_curve(forward_rates):
     plt.legend(loc='lower right', fontsize=20)
 
 # get the data
-sorted_bonds = create_sorted_bonds_by_maturity('bond_prices_chosen_bonds_copy.xlsx')
+sorted_bonds = create_sorted_bonds_by_maturity('bond_prices_chosen_bonds.xlsx')
 spot_rates = calculate_all_spot_rates(sorted_bonds)
 yield_rates = calculate_ytm_curve(sorted_bonds)
 forward_rates = calculate_forward_rate(spot_rates, sorted_bonds)
