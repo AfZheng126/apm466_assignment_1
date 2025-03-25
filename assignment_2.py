@@ -4,6 +4,7 @@ import numpy as np
 from datetime import datetime
 
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 
 # Code for spot rates from assignment 1
 
@@ -39,7 +40,7 @@ def create_sorted_bonds_by_maturity(file_name, sheet_name):
     df['Days since last coupon payment'] = df['Maturity Date'].apply(calculate_days_since_last_coupon_payment)
     df['Dirty price'] = df.apply(lambda row: calculate_dirty_prices(row['Price'], row['Days since last coupon payment'], row['Coupon']), axis= 1)
     df['Years until Maturity'] = df['Years until Maturity'].round(4)
-    print(df[['Dirty price', 'Years until Maturity']])
+    # print(df[['Dirty price', 'Years until Maturity']])
 
     return df
 
@@ -79,9 +80,9 @@ def interpolate_rate(d, x):
     # print(f"finding x = {x}")
     for key in sorted_keys:
         val = d[key]
-        if xl == 0:
-            xl = key
-            yl = val
+        # if xl == 0:
+        #     xl = key
+        #     yl = val
         if key > x:
             xu = key
             yu = val
@@ -94,7 +95,11 @@ def interpolate_rate(d, x):
     # if there is no xu, then just pretend x = xl // TODO: ASK WHAT TO DO HERE
     if xu == 0:
         return yl
+    elif xl == 0:
+        return d[sorted_keys[0]]
     else:
+        # if xu == xl:
+        #     print(f"x: {x}, d: {d}, xu: {xu}, xl: {xl}")
         # Perform linear interpolation
         interpolated_value = yl + (x - xl) * (yu - yl) / (xu - xl)
         return interpolated_value
@@ -125,48 +130,71 @@ def calculate_all_spot_rates(bond):
 # Equity is an option on the assets of the firm
 
 
-
-
-
 # 
-def merton():
+def mertonModel(spotRates, finalYear):
     # The value of a company can be determined at the time debt is due
-    
+
+    years = sorted(spotRates.keys())
+
     # Assume the company's assets follow a geometric Brownian motion dV = mu Vdt + sigma V dz
     # Also assume no tranaction costs (including banckruptcy costs)
 
-    # Black-Scholes gives
-    # S = VN(d1) - Ke^(-rt) N(d2)
-
-    # d1 = - np.log(K * np.exp(-np.e * tau) / V) / (sigma * np.sqrt(tau))
-
-
     # From company financials, obtain the values for 
     # book value of assets (V)
+    V = 2061.751000000
     # book value of liabilities
+    L = 1946.591000000
     # number of shares outstanding
+    shares = 1750000000
 
-    # Calculate stock volatility
+    # Calculate stock volatility (it was calculated in excel)
+    sigmaS = 0.1936689816
+
     # Get the share price
-    # Get the rate of return (interest rates from government bonds - yield rate)
+    sharePrice = 76.53 * 1e-9
+
 
     # Equity = book value of assets - book values of liabilities
-    # Future debt (exercise price) = book value of liabilities * interest rates (K)
+    E = V - L
 
     # market value = number of shares * share price
+    marketValue = shares * sharePrice
 
-    # now guess that the asset volatility is stock volatility
-    # Now calculate via Black Scholes the values of 
-    #       option price (S)
-    #       Delta
-    #       fixed point = sigma_s * S / (V * Delta)
-    # Change the asset volatility to equal to fixed point
+    defaultProbability = []
+    for T in range(1, finalYear + 1):
+        # Get the rate of return (interest rates from government bonds - yield rate)
+        r = spotRates[years[2*(T-1) + 1]]
+        
+        # Future debt (exercise price) = book value of liabilities * interest rates (K)
+        K = L * (1 + r)
 
-    # iterate to converge to the correct asset volatility
+        (optionPrice, sigmaA, solvencyProb) = iterateBlackScholes(V, K, r, sigmaS, T)
+        if T == 1:
+            print(f"option price: {optionPrice}, asset volatility: {sigmaA}, solvencyProb: {solvencyProb}")
+        defaultProbability.append(1 - solvencyProb)
 
-    return 0
+    return defaultProbability
 
+def iterateBlackScholes(V, K, r, sigmaS, T):
+    # initial guess of sigmaA is sigmaS
+    sigmaA = sigmaS
 
+    # iterate until convergence
+    converged = False
+    while converged == False:
+        d1 = (np.log(V / K) + (r + sigmaA**2 / 2) * T) / (sigmaA * np.sqrt(T))
+        d2 = (np.log(V / K) + (r - sigmaA**2 / 2) * T) / (sigmaA * np.sqrt(T))
+        delta = norm.cdf(d1)
+        solvencyProb = norm.cdf(d2)
+
+        optionPrice = V * delta - K * np.exp(-r * T) * solvencyProb
+        
+        newSigmaA = sigmaS * optionPrice / (V * delta)
+        if abs(newSigmaA - sigmaA) < 1e-5:
+            converged = True
+        sigmaA = newSigmaA
+
+    return (optionPrice, sigmaA, solvencyProb)
 
 
 # Use a CreditMetrics-type model to calculate the default probability of the company over time
@@ -190,7 +218,7 @@ def calculateSolvencyProbability(bankBonds, comparyBonds):
 
     return solvencyProbability
 
-def creditMetric(bankBonds, companyBonds):
+def creditMetric(bankBonds, companyBonds, finalYear):
     # Calculate spot rates
     bankSpotRates = calculate_all_spot_rates(bankBonds)
     # print("BOC")
@@ -208,7 +236,7 @@ def creditMetric(bankBonds, companyBonds):
     # Calculate probability of default in 1-10 years
     defaultProbability = []
 
-    for i in range(1, 11):
+    for i in range(1, finalYear + 1):
         # print(i)
         # print(defaultProbability)
         # print((1 - probabilityOfSolency) * probabilityOfSolency**(i - 1))
@@ -221,7 +249,53 @@ def creditMetric(bankBonds, companyBonds):
         defaultProbability.append(probability * 100)
 
     # print(defaultProbability)
-    return defaultProbability
+    return (bankSpotRates, companySpotRates, defaultProbability)
+
+
+def printSpotRates(spotRates):
+    for year in spotRates.keys():
+        print(f"{year}: {spotRates[year]}")
+
+def plotSpotData(bankSpotRates, companySpotRates):
+    data1 = np.array(list(bankSpotRates.values())[1::2]) * 100
+    data2 = np.array(list(companySpotRates.values())[1::2]) * 100 
+    names = ["Canadian Gov. Yield", "TD Yield"]
+    plt.figure()
+    # years = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
+    years = [1, 2, 3, 4, 5]
+    plt.plot(years, data1, label = names[0], linestyle='-')
+    plt.plot(years, data2, label = names[1], linestyle='-')
+
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('Time (Years)', fontsize=30)
+    plt.ylabel("Yield Rate (%)", fontsize=30)
+    plt.title( "Yield Rate Comparison", fontsize=30)
+    plt.legend(loc='upper left', fontsize=20)
+
+def plotDefaultData(data1, data2):
+
+    names = ["Merton", "Credit Metric"]
+    plt.figure()
+
+    years = [1, 2, 3, 4, 5]
+    plt.plot(years, data1, label = names[0], linestyle='-')
+    plt.plot(years, data2, label = names[1], linestyle='-')
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('Time (Years)', fontsize=30)
+    plt.ylabel("Probability (%)", fontsize=30)
+    plt.title( "Probability of Default", fontsize=30)
+    plt.legend(loc='upper left', fontsize=20)
+
+    plt.figure()
+    plt.plot(years, data1, label = names[0], linestyle='-')
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.xlabel('Time (Years)', fontsize=30)
+    plt.ylabel("Probability (%)", fontsize=30)
+    plt.title( "Probability of Default", fontsize=30)
+    plt.legend(loc='upper left', fontsize=20)
 
 
 
@@ -232,7 +306,20 @@ tDBonds = create_sorted_bonds_by_maturity('bonds_data.xlsx', 'TD bond data')
 
 
 
-creditMetricModelProbabilityOfDefault = creditMetric(bankOfCanadaBonds, tDBonds)
+(bankSpotRates, companySpotRates, creditMetricModelProbabilityOfDefault) = creditMetric(bankOfCanadaBonds, tDBonds, 5)
+# print(f"Credit Metric default rates: {creditMetricModelProbabilityOfDefault}")
 
+# print("bank")
+# printSpotRates(bankSpotRates)
+# print("TD")
+# printSpotRates(companySpotRates)
+
+mertonModelProbabilityOfDefault = mertonModel(bankSpotRates, 5)
+# print(f"Merton default rates: {mertonModelProbabilityOfDefault}")
 
 # plot figures
+# print(list(bankSpotRates.values()))
+# print(np.array(list(bankSpotRates.values())[1::2]) * 100)
+plotSpotData(bankSpotRates, companySpotRates)
+plotDefaultData(mertonModelProbabilityOfDefault, creditMetricModelProbabilityOfDefault)
+plt.show()
