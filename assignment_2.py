@@ -156,6 +156,7 @@ def mertonModel(spotRates, finalYear):
 
     # Equity = book value of assets - book values of liabilities
     E = V - L
+    print(f"Equity = {E}")
 
     # market value = number of shares * share price
     marketValue = shares * sharePrice
@@ -164,6 +165,8 @@ def mertonModel(spotRates, finalYear):
     for T in range(1, finalYear + 1):
         # Get the rate of return (interest rates from government bonds - yield rate)
         r = spotRates[years[2*(T-1) + 1]]
+        if T == 1:
+            print(f"risk free rate: {r}")
         
         # Future debt (exercise price) = book value of liabilities * interest rates (K)
         K = L * (1 + r)
@@ -231,7 +234,7 @@ def creditMetric(bankBonds, companyBonds, finalYear):
 
     # Calculate the credit spread for a 1 year spot rate
     probabilityOfSolency = calculateSolvencyProbability(bankSpotRates, companySpotRates)
-    # print(f"probability of not defaulting: {probabilityOfSolency}")
+    print(f"probability of not defaulting: {probabilityOfSolency}")
 
     # Calculate probability of default in 1-10 years
     defaultProbability = []
@@ -260,42 +263,49 @@ def plotSpotData(bankSpotRates, companySpotRates):
     data1 = np.array(list(bankSpotRates.values())[1::2]) * 100
     data2 = np.array(list(companySpotRates.values())[1::2]) * 100 
     names = ["Canadian Gov. Yield", "TD Yield"]
-    plt.figure()
+    plt.figure(figsize=(7, 4))
     # years = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
     years = [1, 2, 3, 4, 5]
-    plt.plot(years, data1, label = names[0], linestyle='-')
-    plt.plot(years, data2, label = names[1], linestyle='-')
+    plt.plot(years, data1, label = names[0], linestyle='-', linewidth=2.5)
+    plt.plot(years, data2, label = names[1], linestyle='-', linewidth=2.5)
 
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
-    plt.xlabel('Time (Years)', fontsize=30)
-    plt.ylabel("Yield Rate (%)", fontsize=30)
-    plt.title( "Yield Rate Comparison", fontsize=30)
-    plt.legend(loc='upper left', fontsize=20)
+
+    fs = 12
+    fs2 = 10
+
+    plt.xticks(fontsize=fs2)
+    plt.yticks(fontsize=fs2)
+    plt.xlabel('Time (Years)', fontsize=fs)
+    plt.ylabel("Yield Rate (%)", fontsize=fs)
+    plt.title( "Yield Rate Comparison", fontsize=fs)
+    plt.legend(loc='upper left', fontsize=fs2)
 
 def plotDefaultData(data1, data2):
 
     names = ["Merton", "Credit Metric"]
-    plt.figure()
+    plt.figure(figsize=(7, 4))
+
+    fs2 = 10
+    fs = 12
 
     years = [1, 2, 3, 4, 5]
-    plt.plot(years, data1, label = names[0], linestyle='-')
-    plt.plot(years, data2, label = names[1], linestyle='-')
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
-    plt.xlabel('Time (Years)', fontsize=30)
-    plt.ylabel("Probability (%)", fontsize=30)
-    plt.title( "Probability of Default", fontsize=30)
-    plt.legend(loc='upper left', fontsize=20)
+    plt.plot(years, data1, label = names[0], linestyle='-', linewidth=2.5)
+    plt.plot(years, data2, label = names[1], linestyle='-', linewidth=2.5)
+    plt.xticks(fontsize=fs2)
+    plt.yticks(fontsize=fs2)
+    plt.xlabel('Time (Years)', fontsize=fs)
+    plt.ylabel("Probability (%)", fontsize=fs)
+    plt.title( "Probability of Default", fontsize=fs)
+    plt.legend(loc='upper left', fontsize=fs2)
 
-    plt.figure()
-    plt.plot(years, data1, label = names[0], linestyle='-')
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
-    plt.xlabel('Time (Years)', fontsize=30)
-    plt.ylabel("Probability (%)", fontsize=30)
-    plt.title( "Probability of Default", fontsize=30)
-    plt.legend(loc='upper left', fontsize=20)
+    plt.figure(figsize=(7, 4))
+    plt.plot(years, data1, label = names[0], linestyle='-', linewidth=2.5)
+    plt.xticks(fontsize=fs2)
+    plt.yticks(fontsize=fs2)
+    plt.xlabel('Time (Years)', fontsize=fs)
+    plt.ylabel("Probability (%)", fontsize=fs)
+    plt.title( "Probability of Default", fontsize=fs)
+    plt.legend(loc='upper left', fontsize=fs2)
 
 
 
@@ -309,10 +319,10 @@ tDBonds = create_sorted_bonds_by_maturity('bonds_data.xlsx', 'TD bond data')
 (bankSpotRates, companySpotRates, creditMetricModelProbabilityOfDefault) = creditMetric(bankOfCanadaBonds, tDBonds, 5)
 # print(f"Credit Metric default rates: {creditMetricModelProbabilityOfDefault}")
 
-# print("bank")
-# printSpotRates(bankSpotRates)
-# print("TD")
-# printSpotRates(companySpotRates)
+print("bank")
+printSpotRates(bankSpotRates)
+print("TD")
+printSpotRates(companySpotRates)
 
 mertonModelProbabilityOfDefault = mertonModel(bankSpotRates, 5)
 # print(f"Merton default rates: {mertonModelProbabilityOfDefault}")
